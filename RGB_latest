@@ -276,8 +276,8 @@ def coms(mbox):
             distribute[0] = False # receevied is false.
             ev3.sepaker.beep()
             ev3.screen.print("Collision warning!")
-            
-        elif inbox == messages[1]: # giftForme
+        # Package delivered (giftForme)
+        elif inbox == messages[1]:
             ev3.speaker.beep()
             # Will go there and pick up the stuff
             # send[0] = 'occupied' # Send occupied signal.
@@ -287,11 +287,12 @@ def coms(mbox):
             distribute[1] = False # occupied 
             wait(10)
             ev3.screen.print(inbox)
-
-        elif inbox == messages[5]: # Free
+        # Free
+        elif inbox == messages[5]:
             distribute[0] = False # Occupied
             distribute[1] = False # Receevied
 
+        # Emergency stop
         elif inbox == messages[4]: # Emergency stop
             Em_stop[0] = True  # does this work? Idk
 
