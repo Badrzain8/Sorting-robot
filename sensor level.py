@@ -90,12 +90,6 @@ def sense_object_colour():
         
     return color
 
-def color():
-    sensed_colour = None
-    elbow_sensor.rgb() == color
-    max(color) == sensed_colour
-
-    return sensed_colour
 
 def robot_pick(position):
     # in this function, the base motor makes the arm moves to the deignated
@@ -105,7 +99,7 @@ def robot_pick(position):
     # Rotate to the pick-up location.
     base_motor.run_target(100, position)
     # Lower the arm elbow.
-    elbow_motor.run_target(20, -40)
+    elbow_motor.run_target(20, then=Stop.COAST, duty_limit=50)
     # Close the gripper to grab the item.
     gripper_motor.run_until_stalled(150, then=Stop.HOLD, duty_limit=50)
 
