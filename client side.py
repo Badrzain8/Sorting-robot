@@ -19,7 +19,7 @@ ev3 = EV3Brick()
 conveyor_motor = Motor(Port.D)
 
 # This is the name of the remote EV3 or PC we are connecting to.
-SERVER = 'ev3dev-D'
+SERVER = 'ev3dev-B'
 
 client = BluetoothMailboxClient()
 mbox = TextMailbox('greeting', client)

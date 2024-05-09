@@ -7,23 +7,21 @@ from pybricks.tools import wait
 from pybricks.messaging import BluetoothMailboxServer, TextMailbox, BluetoothMailboxClient 
 import time
 import threading as th
-# from coms import *
-#from coms import coms, distribute, Connect, sendMessage, thread2Alive
 
 # The dynamic dictionary that is used for the establishments of positions and colours.
 active_zones = {}
 
 emergency_stop = False
-belt = True
+belt = False
 
-def worker_function():
-    global emergency_stop
-    while not emergency_stop:
-        print("Working...")
-        if  Button.RIGHT in ev3.buttons.pressed():
-            emergency_stop = True
-            print("Worker stopped.")
-            wait(50)
+# def worker_function():
+#     global emergency_stop
+#     while not emergency_stop:
+#         print("Working...")
+#         if  Button.RIGHT in ev3.buttons.pressed():
+#             emergency_stop = True
+#             print("Worker stopped.")
+#             wait(50)
         
 
 # Create a worker thread
@@ -31,8 +29,8 @@ def worker_function():
 # worker_thread.start()
 
 # Create a worker thread
-worker_thread = th.Thread(target=worker_function)
-worker_thread.start()
+# worker_thread = th.Thread(target=worker_function)
+# worker_thread.start()
 
 # Let the worker thread run for a while
 time.sleep(5)
@@ -49,7 +47,7 @@ client = BluetoothMailboxClient()
 # The server must be started before the client!
 me = ['client']
 # This is the name of the remote EV3 or PC we are connecting to.
-SERVERID = 'ev3dev-D' + collaborator
+SERVERID = 'ev3dev-F' + collaborator
 # Before running this program, make sure the client and server EV3 bricks are
 # paired using Bluetooth, but do NOT connect them. The program will take care
 # of establishing the connection.
@@ -63,16 +61,12 @@ Em_stop = [False]
 thread2Alive = [False]
 thread_one = th.Thread()
 
-global zoneSort
-global zoneHeight
-cargo = False
-
 # Initialize the EV3 Brick
 ev3 = EV3Brick()
 
 mbox = ""
 
-distributeText = ['receevied', 'deliver']  #0 : receevied, 1: deliver.
+distributeText = ['receevied', 'occupied']  #0 : receevied, 1: occupied.
 distribute = [False, False]
 
 # Configure the gripper motor on Port A with default settings.
@@ -102,7 +96,7 @@ base_switch = TouchSensor(Port.S1)
 elbow_sensor = ColorSensor(Port.S2)
 emergency = False
 
-#-------------------------------FUNCTION DEFINITIONS----------------------#
+#-------------------------------FUNCTION DEFINITIONS---------------------------------#
 def color_func():
     ret_col = None
     color = elbow_sensor.rgb()
@@ -148,12 +142,12 @@ def robot_pick(position):
     #elbow_motor.run_target(-60, 0)
 
     # Close the gripper to grab the item.
-    gripper_motor.run_until_stalled(250, then=Stop.HOLD, duty_limit=50) 
+    gripper_motor.run_until_stalled(250, then=Stop.HOLD, duty_limit=70) 
 
     # Raise the arm to lift the item up to the level of colour sensor.
     elbow_motor.run_angle(50, 20, then=Stop.HOLD)
 
-    # Slowly raise the arm til' the color sensor senses the color.
+    # Slowly raise the arm tilL the color sensor senses the color.
     while color_func() == None and elbow_motor.angle() < 80:
         elbow_motor.run(10)
         if elbow_motor.angle() > 70 and gripper_motor.angle() > -35:
@@ -199,12 +193,15 @@ def time_definitions():
     # minute = local.tm_min + 11
     # seconds = local.tm_sec - 10
     "D"
-    day = local.tm_mday - 14
-    hour = local.tm_hour + 6
-    minute = local.tm_min - 7
+    # day = local.tm_mday - 14
+    # hour = local.tm_hour + 6
+    # minute = local.tm_min - 7
+    # seconds = local.tm_sec
+    "B"
+    day = local.tm_mday
+    hour = local.tm_hour + 2
+    minute = local.tm_min
     seconds = local.tm_sec
-
-
 
     if hour < 0:
         hour += 24
@@ -259,7 +256,7 @@ def robot_resume():
 
 def coms(mbox):
     # global mbox
-    # mbox = Connect()
+    mbox = Connect()
     while True:
         if thread2Alive[0] == False: break
 
@@ -270,11 +267,12 @@ def coms(mbox):
 
         # Reads the message from robot, one of possible 6 messages from messages[].
         inbox = mbox.read()
+        print(inbox)
 
         if inbox == messages[0]: # Occupied
             distribute[1] = True # Collision warning!
-            distribute[0] = False # receevied is false.
-            ev3.sepaker.beep()
+            # distribute[0] = False # receevied is false.
+            ev3.speaker.beep()
             ev3.screen.print("Collision warning!")
         # Package delivered (giftForme)
         elif inbox == messages[1]:
@@ -284,13 +282,13 @@ def coms(mbox):
 
             # Package has been delivered to us and safe to go there.
             distribute[0] = True  # receevied
-            distribute[1] = False # occupied 
+            # distribute[1] = False # occupied 
             wait(10)
             ev3.screen.print(inbox)
         # Free
         elif inbox == messages[5]:
             distribute[0] = False # Occupied
-            distribute[1] = False # Receevied
+            # distribute[1] = False # Receevied
 
         # Emergency stop
         elif inbox == messages[4]: # Emergency stop
@@ -326,6 +324,8 @@ def sendMessage(mbox):
                 ms = False
         except:
             wait(5)
+    if send[0] != messages[0]: # do not reset from occupied
+        send[0] = messages[-1] # Set to nothing, we have sent the message.
 
 def Connect():
 
@@ -346,21 +346,49 @@ def Connect():
         client = BluetoothMailboxClient()
         me[0] = client    
         me[0].connect(SERVERID)
+
         print('connected!')
         # client = BluetoothMailboxClient()
         ev3.speaker.beep()
     
     mbox = TextMailbox('greeting', me[0])
 
-    
     return mbox
 
-
-if __name__ == "__main__":
-    mbox = Connect()
-    coms(mbox)
-
-#------------------------------------------------------------------------
+def sorting_zones(pickup_zone, color_func):
+    robot_pick(pickup_zone)
+    if color_func() == "Red":
+        if "Red" in active_zones:
+            robot_release(active_zones["Red"])
+            robot_pick(pickup_zone)
+        else:
+            robot_release(TRASH)
+            robot_pick(pickup_zone)
+    elif color_func() == "Blue":
+        if "Blue" in active_zones:
+            robot_release(active_zones["Blue"])
+            robot_pick(pickup_zone)
+        else:
+            robot_release(TRASH)
+            robot_pick(pickup_zone)
+    elif color_func() == "Yellow":
+        if "Yellow" in active_zones:
+            robot_release(active_zones["Yellow"])
+            robot_pick(pickup_zone)
+        else:
+            robot_release(TRASH)
+            robot_pick(pickup_zone)
+    elif color_func() == "Green":
+        if "Green" in active_zones:
+            robot_release(active_zones["Green"])
+            robot_pick(pickup_zone)
+        else:
+            robot_release(TRASH)
+            robot_pick(pickup_zone)
+    else:
+        robot_release(TRASH)
+        robot_pick(pickup_zone)
+#-------------------------------FUNCTION DEFINITIONS---------------------------------#
 # Time definitions
 day, hour, minute, seconds = time_definitions()
 
@@ -409,12 +437,40 @@ zone_picker, p = 1, 1
 time_set, time_set_day, time_set_hour, time_set_min = False, False, False, False
 day_set, hour_set, min_set = day, hour, minute
 menu, center, check, pickup_zone, zones, conveyor_belt = True, False, False, False, False, False
+communication, Done = False, False
 
 # Main loop.
 while True:
+# -------------------connection---------------------
+    while Done == False:
+        ev3.screen.draw_text(0, 0, "Pair with ")
+        ev3.screen.draw_text(0, 20, "collaborator ?")
+        ev3.screen.draw_text(0, 40, "Press center if YES")
+        ev3.screen.draw_text(0, 70, "Press right if NO")
+        if Button.CENTER in ev3.buttons.pressed():
+            communication = True
+            mbox = Connect()
+            coms(mbox)
+            ev3.screen.clear()
+            ev3.screen.draw_text(50, 50, "Connected")
+            print("Connected")
+            wait(1000)
+            ev3.screen.clear() 
+
+            # if me[0] == 'server':
+            #     me[0].send('')
+            # elif me[0] == 'client':
+            #     send[0] = 'feed'
+            #     sendMessage(mbox)
+            # wait(200)
+            Done = True
+        elif Button.RIGHT in ev3.buttons.pressed():
+            communication = False
+            Done = True
+# -------------------connection--------------------------
 
 # ----------------Pause and Resume button----------------
-    # while emergency == False:    
+    # while emergency == False:   
     #     if Button.LEFT in ev3.buttons.pressed():
     #         emergency = True
     #         robot_pause()
@@ -833,69 +889,46 @@ while True:
             if Button.CENTER in ev3.buttons.pressed(): # And rest have been chosen
                 wait(200)
                 ev3.screen.clear()
-                p=0
+                p=1
                 while conveyor_belt == False:
-                    ev3.screen.clear()
-                    ev3.screen.draw_text(0, 0, "Conveyor Belt", Color.WHITE, Color.BLACK)
-                    ev3.screen.draw_text(50, 20, "Yes")
-                    ev3.screen.draw_text(50, 40, "No")
-                    wait(200)
-                    if Button.UP in ev3.buttons.pressed():
-                        p += 1
-                    elif Button.DOWN in ev3.buttons.pressed():
-                        p -=1
-                    
-                    if p < 0:
-                        P = 0
-                    elif p > 2:
-                        p = 2
-
-                    if p == 1:
-                        if Button.UP in ev3.buttons.pressed():
-                            p += 1
-                        elif Button.DOWN in ev3.buttons.pressed():
-                            p -=1
-                        if p < 0:
-                            P = 0
-                        elif p > 2:
-                            p = 2
+                    while p == 1:
                         ev3.screen.clear()
                         ev3.screen.draw_text(0, 0, "Conveyor Belt")
                         ev3.screen.draw_text(50, 20, "Yes", Color.WHITE, Color.BLACK)
                         ev3.screen.draw_text(50, 40, "No")
+                        if Button.DOWN in ev3.buttons.pressed():
+                            p += 1
                         wait(200)
                         if Button.CENTER in ev3.buttons.pressed():
                             conveyor_belt = True
                             belt = True
-                    elif p == 2:
-                        if Button.UP in ev3.buttons.pressed():
-                            p += 1
-                        elif Button.DOWN in ev3.buttons.pressed():
-                            p -=1
-                        if p < 0:
-                            P = 0
-                        elif p > 2:
-                            p = 2
+                            break
+                    while p == 2:
                         ev3.screen.clear()
-                        ev3.screen.draw_text(50, 0, "Conveyor Belt")
-                        ev3.screen.draw_text(0, 20, "Yes")
-                        ev3.screen.draw_text(0, 40, "No", Color.WHITE, Color.BLACK)
+                        ev3.screen.draw_text(0, 0, "Conveyor Belt")
+                        ev3.screen.draw_text(50, 20, "Yes")
+                        ev3.screen.draw_text(50, 40, "No", Color.WHITE, Color.BLACK)
+                        if Button.UP in ev3.buttons.pressed():
+                            p -= 1
                         wait(200)
                         if Button.CENTER in ev3.buttons.pressed():
                             conveyor_belt = True
+                            belt = False
+                            break
         elif menu_press_count == 3: # Start
             ev3.screen.clear()
             ev3.screen.draw_text(50, 0, "MENU")
             ev3.screen.draw_text(0, 20, "Working Hours")
             ev3.screen.draw_text(0, 40, "Sorting Zones")
             ev3.screen.draw_text(0, 60, "Conveyor Belt")
-            ev3.screen.draw_text(50, 60, "--> Start", Color.WHITE, Color.BLACK)
+            ev3.screen.draw_text(50, 80, "--> Start", Color.WHITE, Color.BLACK)
             wait(200)
             if Button.CENTER in ev3.buttons.pressed(): # And rest have been chosen
                 ev3.screen.clear()
                 menu = False
 
     # ticker(sec_sched)
+    # Timer 
     while sec_sched > pre_sec:
         day, hour, minute, seconds = time_definitions()
         pre_sec = day*86400 + hour*3600 + minute*60 + seconds
@@ -904,10 +937,10 @@ while True:
         ev3.screen.draw_text(65, 70, sec_sched - pre_sec, Color.WHITE, Color.BLACK)
 #-----------------DASHBOARD MENU-------------------------
     # If robot connect
-    if belt == True:
+    if belt == True and communication == False:
         server = BluetoothMailboxServer()
         mbox = TextMailbox('greeting', server)
-
+        
         print('waiting for connection...')
         server.wait_for_connection()
         print('connected!')
@@ -941,45 +974,97 @@ while True:
         gripper_motor.run_until_stalled(100, then=Stop.HOLD, duty_limit=25)
         gripper_motor.reset_angle(0)
         gripper_motor.run_target(150, -90)
+    elif belt == False and communication == True:
+        while communication == True and belt == False:
+            sendMessage(mbox)
+            coms(mbox)
+            print(sendMessage(mbox))
+            print(coms(mbox))
+            print(mbox)
+            if distribute[0] == True and distribute[1] == False:
+                # Delivered
+                elbow_motor.stop()
+                base_motor.stop()
+                gripper_motor.stop()
+            elif distribute[0] == False and distribute[1] == False:
+                # Free
+                # sorting_zones(active_zones['Pick-Up Zone'], color_func())
+                robot_pick(active_zones['Pick-Up Zone'])
+                if color_func() == "Red":
+                    if "Red" in active_zones:
+                        robot_release(active_zones["Red"])
+                        robot_pick(active_zones['Pick-Up Zone'])
+                    else:
+                        robot_release(TRASH)
+                        robot_pick(active_zones['Pick-Up Zone'])
+                elif color_func() == "Blue":
+                    if "Blue" in active_zones:
+                        robot_release(active_zones["Blue"])
+                        robot_pick(active_zones['Pick-Up Zone'])
+                    else:
+                        robot_release(TRASH)
+                        robot_pick(active_zones['Pick-Up Zone'])
+                elif color_func() == "Yellow":
+                    if "Yellow" in active_zones:
+                        robot_release(active_zones["Yellow"])
+                        robot_pick(active_zones['Pick-Up Zone'])
+                    else:
+                        robot_release(TRASH)
+                        robot_pick(active_zones['Pick-Up Zone'])
+                elif color_func() == "Green":
+                    if "Green" in active_zones:
+                        robot_release(active_zones["Green"])
+                        robot_pick(active_zones['Pick-Up Zone'])
+                    else:
+                        robot_release(TRASH)
+                        robot_pick(active_zones['Pick-Up Zone'])
+                else:
+                    robot_release(TRASH)
+                    robot_pick(active_zones['Pick-Up Zone'])
+            elif distribute[0] == False and distribute[1] == True:
+                # Collision Warning
+                elbow_motor.stop()
+                base_motor.stop()
+                gripper_motor.stop()
+    else:
+        # Resets the arm's elbow position. Touches the bottom.
+        elbow_motor.run_until_stalled(-40, then=Stop.HOLD, duty_limit=10)
+        print(elbow_motor.run_until_stalled(-40, then=Stop.HOLD, duty_limit=10))
+
+        # Close gripper if not closed
+        gripper_motor.run_until_stalled(100, then=Stop.COAST, duty_limit=50)
+
+        # Resets elbow_motor angle to zero so we can use it later.
+        elbow_motor.reset_angle(0)
+        print(elbow_motor.angle())
+        elbow_motor.hold()
+
+        # Moves up 80 degrees.
+        elbow_motor.run_angle(100, 80, then=Stop.HOLD)
+
+        # Set up the base motor, make it turn all the way to the right
+        # until the touch sensor is pressed and then reset the base motor
+        # angle to 0 and hold it in that position.
+        base_motor.run(-300)
+        while not base_switch.pressed():
+            wait(10)
+        base_motor.reset_angle(0)
+        base_motor.hold()
+
+        # Set up the gripper, make the claw close and set that as 0 angle
+        # then open it with 90 degrees to make it ready to grab the items.
+        gripper_motor.run_until_stalled(100, then=Stop.HOLD, duty_limit=25)
+        gripper_motor.reset_angle(0)
+        gripper_motor.run_target(150, -90)
 
     ev3.screen.clear()
 
-# ###### TESTAR ######
-#     if  not thread2Alive[0] and 'coms' in active_zones:
-#         if 'coms' in active_zones:
-#             garbage = 'coms'
-#             comsExists = True
-
-#         # if 'belt' in active_zones:
-#         #     beltExists = True
-
-#         # Wait for connection, before startup and then start communication Thread.
-#         mbox = Connect(SERVERID)
-#         wait(2)
-#         thread_one = th.Thread(target=coms, args=mbox)
-#         thread2Alive[0] = True
-#         thread_one.start()
-#     elif not ('coms' in active_zones or 'belt' in active_zones):
-#         thread2Alive[0] = False
-#         comsExists= False
-#         beltExists= False
-#         wait(5)
-#     elif comsExists: # and thread2Alive[0] == True:
-#             if send[0] != 'nothing':
-#                 send[0] = messages[5] # Free
-#                 sendMessage(mbox)
-#                 send[0] = 'nothing'
-#             # Make sure we are not blocking the coms zone, if no pickup exists.
-#             elif not 'Pick-Up Zone' in active_zones:
-#                 pickupzone = active_zones['coms'] % (active_zones['coms'] + 1)
-#                 robot_release()
-###### TESTAR ######
-
-    while color_func() != None:
-        while belt == True:
-            # What's left with conveyor belt
-            # Being able to pick if you wanna go with conveyor belt or not (variable belt)
-            # Make it more smooth
+    # while color_func() != None:
+    while belt == True:
+        # What's left with conveyor belt
+        # Being able to pick if you wanna go with conveyor belt or not (variable belt)
+        # Make it more smooth
+        if color_func() != None:
             base_motor.run_target(300, active_zones["Pick-Up Zone"])
             elbow_motor.stop()
             if color_func() == "Red":
@@ -1018,38 +1103,39 @@ while True:
                 else:
                     robot_release(TRASH)
                     robot_pick(active_zones['Pick-Up Zone'])
-        if belt == False:
-            robot_pick(active_zones['Pick-Up Zone'])
-            if color_func() == "Red":
-                if "Red" in active_zones:
-                    robot_release(active_zones["Red"])
-                    robot_pick(active_zones['Pick-Up Zone'])
-                else:
-                    robot_release(TRASH)
-                    robot_pick(active_zones['Pick-Up Zone'])
-            elif color_func() == "Blue":
-                if "Blue" in active_zones:
-                    robot_release(active_zones["Blue"])
-                    robot_pick(active_zones['Pick-Up Zone'])
-                else:
-                    robot_release(TRASH)
-                    robot_pick(active_zones['Pick-Up Zone'])
-            elif color_func() == "Yellow":
-                if "Yellow" in active_zones:
-                    robot_release(active_zones["Yellow"])
-                    robot_pick(active_zones['Pick-Up Zone'])
-                else:
-                    robot_release(TRASH)
-                    robot_pick(active_zones['Pick-Up Zone'])
-            elif color_func() == "Green":
-                if "Green" in active_zones:
-                    robot_release(active_zones["Green"])
-                    robot_pick(active_zones['Pick-Up Zone'])
-                else:
-                    robot_release(TRASH)
-                    robot_pick(active_zones['Pick-Up Zone'])
+    while belt == False:
+        robot_pick(active_zones['Pick-Up Zone'])
+        if color_func() == "Red":
+            if "Red" in active_zones:
+                robot_release(active_zones["Red"])
+                robot_pick(active_zones['Pick-Up Zone'])
             else:
                 robot_release(TRASH)
                 robot_pick(active_zones['Pick-Up Zone'])
+        elif color_func() == "Blue":
+            if "Blue" in active_zones:
+                robot_release(active_zones["Blue"])
+                robot_pick(active_zones['Pick-Up Zone'])
+            else:
+                robot_release(TRASH)
+                robot_pick(active_zones['Pick-Up Zone'])
+        elif color_func() == "Yellow":
+            if "Yellow" in active_zones:
+                robot_release(active_zones["Yellow"])
+                robot_pick(active_zones['Pick-Up Zone'])
+            else:
+                robot_release(TRASH)
+                robot_pick(active_zones['Pick-Up Zone'])
+        elif color_func() == "Green":
+            if "Green" in active_zones:
+                robot_release(active_zones["Green"])
+                robot_pick(active_zones['Pick-Up Zone'])
+            else:
+                robot_release(TRASH)
+                robot_pick(active_zones['Pick-Up Zone'])
+        else:
+            robot_release(TRASH)
+            robot_pick(active_zones['Pick-Up Zone'])
 
 # to be continued...
+
