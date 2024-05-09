@@ -14,23 +14,6 @@ active_zones = {}
 emergency_stop = False
 belt = False
 
-# def worker_function():
-#     global emergency_stop
-#     while not emergency_stop:
-#         print("Working...")
-#         if  Button.RIGHT in ev3.buttons.pressed():
-#             emergency_stop = True
-#             print("Worker stopped.")
-#             wait(50)
-        
-
-# Create a worker thread
-# worker_thread = th.Thread(target=worker_function, Daemon = True)
-# worker_thread.start()
-
-# Create a worker thread
-# worker_thread = th.Thread(target=worker_function)
-# worker_thread.start()
 
 # Let the worker thread run for a while
 time.sleep(5)
@@ -46,8 +29,9 @@ client = BluetoothMailboxClient()
 
 # The server must be started before the client!
 me = ['client']
-# This is the name of the remote EV3 or PC we are connecting to.
-SERVERID = 'ev3dev-F' + collaborator
+# This is the name of the remote EV3 are connecting to, this can be changed based on the name of the robot.
+SERVERID = 'ev3dev-' + collaborator 
+
 # Before running this program, make sure the client and server EV3 bricks are
 # paired using Bluetooth, but do NOT connect them. The program will take care
 # of establishing the connection.
@@ -66,8 +50,8 @@ ev3 = EV3Brick()
 
 mbox = ""
 
-distributeText = ['receevied', 'occupied']  #0 : receevied, 1: occupied.
-distribute = [False, False]
+distributemessages = ['receevied', 'occupied']  #0 : receevied, 1: occupied.
+distributelist = [False, False]
 
 # Configure the gripper motor on Port A with default settings.
 gripper_motor = Motor(Port.A)
@@ -97,6 +81,10 @@ elbow_sensor = ColorSensor(Port.S2)
 emergency = False
 
 #-------------------------------FUNCTION DEFINITIONS---------------------------------#
+
+# this function is used to detect the colour of the item.
+# The function returns the colour of the item.
+# The function uses the RGB sensor to detect the colour of the item.
 def color_func():
     ret_col = None
     color = elbow_sensor.rgb()
@@ -129,10 +117,12 @@ def color_func():
     print(ret_col)
     return ret_col
 
+
+# In this function, the base motor makes the arm moves to the deignated
+# pick-up location and then lower the elbow and close up the gripper to
+# grab the item and raise it up to the level of colour sensor.
 def robot_pick(position):
-    # In this function, the base motor makes the arm moves to the deignated
-    # pick-up location and then lower the elbow and close up the gripper to
-    # grab the item and raise it up to the level of colour sensor.
+  
     
     # Rotate to the pick-up location.
     base_motor.run_target(300, position)
@@ -160,11 +150,12 @@ def robot_pick(position):
     # wait(800)
     # elbow_motor.run_angle(30, 10, then=Stop.HOLD)
 
-def robot_release(position):
-    # In this function, the base rotate the arm to the calibrated drop-off zone
-    # for that specific colour the item has and then it lower the arm elbow and 
-    # open the gripper to release the item in that position.
 
+# In this function, the base rotate the arm to the calibrated drop-off zone
+# for that specific colour the item has and then it lower the arm elbow and 
+# open the gripper to release the item in that position.
+def robot_release(position):
+    
     elbow_motor.run_angle(50, 30, then=Stop.HOLD)
 
     # Rotate to the drop-off position designated to that specific colour of the picked up item.
@@ -179,6 +170,10 @@ def robot_release(position):
     # Raise the arm.
     elbow_motor.run_target(150, 60) #var (60, 0)
 
+
+# In this function, we get the current time and date from the EV3 brick, it differs from the actual time and date.
+# and it differs from robot to robot.
+# The function returns the current day, hour, minute and seconds.
 def time_definitions():
     loc = time.time()
     local = time.localtime(loc)
@@ -228,14 +223,8 @@ def time_definitions():
         
     return day, hour, minute, seconds
 
-def ticker(sec_sched):
-    while sec_sched > pre_sec:
-        day, hour, minute, seconds = time_definitions()
-        pre_sec = day*86400 + hour*3600 + minute*60 + seconds
 
-        ev3.screen.draw_text(10, 50, "Waiting to Start", Color.WHITE, Color.BLACK)
-        ev3.screen.draw_text(65, 70, sec_sched - pre_sec, Color.WHITE, Color.BLACK)
-
+# this function will stop all the motors and clear the screen to show the message "PAUSED".
 def robot_pause():
     ev3.screen.clear()
     ev3.screen.draw_text(50, 50, "PAUSED")
@@ -245,6 +234,7 @@ def robot_pause():
     gripper_motor.stop()
     ev3.screen.clear()
     
+# this function will run all the motors and clear the screen to show the message "RESUMING".
 def robot_resume():
     ev3.screen.clear()
     ev3.screen.draw_text(40, 50, "RESUMING")
@@ -254,6 +244,7 @@ def robot_resume():
     gripper_motor.stop()
     ev3.screen.clear()
 
+# this function is used for the comminucation between the two robots.
 def coms(mbox):
     # global mbox
     mbox = Connect()
@@ -270,7 +261,7 @@ def coms(mbox):
         print(inbox)
 
         if inbox == messages[0]: # Occupied
-            distribute[1] = True # Collision warning!
+            distributelist[1] = True # Collision warning!
             # distribute[0] = False # receevied is false.
             ev3.speaker.beep()
             ev3.screen.print("Collision warning!")
@@ -281,19 +272,21 @@ def coms(mbox):
             # send[0] = 'occupied' # Send occupied signal.
 
             # Package has been delivered to us and safe to go there.
-            distribute[0] = True  # receevied
+            distributelist[0] = True  # receevied
             # distribute[1] = False # occupied 
             wait(10)
             ev3.screen.print(inbox)
         # Free
         elif inbox == messages[5]:
-            distribute[0] = False # Occupied
+            distributelist[0] = False # Occupied
             # distribute[1] = False # Receevied
 
         # Emergency stop
         elif inbox == messages[4]: # Emergency stop
             Em_stop[0] = True  # does this work? Idk
 
+
+# this function is used to send messages between the connected robots.
 def sendMessage(mbox):
     # global mbox
     print("sending message: ", send[0])
@@ -327,6 +320,8 @@ def sendMessage(mbox):
     if send[0] != messages[0]: # do not reset from occupied
         send[0] = messages[-1] # Set to nothing, we have sent the message.
 
+
+# this function is used to connect the two robots together and identify which robot is the server and which one is the client.
 def Connect():
 
     if me[0] == 'server':
@@ -355,6 +350,8 @@ def Connect():
 
     return mbox
 
+
+# this function is used to sort the items based on their colours.
 def sorting_zones(pickup_zone, color_func):
     robot_pick(pickup_zone)
     if color_func() == "Red":
@@ -389,9 +386,12 @@ def sorting_zones(pickup_zone, color_func):
         robot_release(TRASH)
         robot_pick(pickup_zone)
 #-------------------------------FUNCTION DEFINITIONS---------------------------------#
+
+# ----------------------------------Variables & dictionaries---------------------------------#
 # Time definitions
 day, hour, minute, seconds = time_definitions()
 
+###################### LEFT ##########################
 # Left dominant paper 
 LEFT_LEFT=210
 LEFT=165
@@ -406,7 +406,9 @@ zone_dict = {
     3 : MIDDLE,
     4 : RIGHT,
 }
+###################### LEFT ##########################
 
+###################### RIGHT ##########################
 # Right dominant paper
 # LEFT_LEFT=210
 # MIDDLE=115
@@ -414,7 +416,6 @@ zone_dict = {
 # RIGHT_RIGHT=15
 # TRASH = 165
 
-###################### RIGHT ##########################
 # zone_dict = {
 #     1 : LEFT_LEFT,
 #     2 : MIDDLE,
@@ -439,7 +440,7 @@ day_set, hour_set, min_set = day, hour, minute
 menu, center, check, pickup_zone, zones, conveyor_belt = True, False, False, False, False, False
 communication, Done = False, False
 
-# Main loop.
+# Main loop. The main program starts here.
 while True:
 # -------------------connection---------------------
     while Done == False:
@@ -936,6 +937,7 @@ while True:
         ev3.screen.draw_text(10, 50, "Waiting to Start", Color.WHITE, Color.BLACK)
         ev3.screen.draw_text(65, 70, sec_sched - pre_sec, Color.WHITE, Color.BLACK)
 #-----------------DASHBOARD MENU-------------------------
+   
     # If robot connect
     if belt == True and communication == False:
         server = BluetoothMailboxServer()
@@ -981,12 +983,12 @@ while True:
             print(sendMessage(mbox))
             print(coms(mbox))
             print(mbox)
-            if distribute[0] == True and distribute[1] == False:
+            if distributelist[0] == True and distributelist[1] == False:
                 # Delivered
                 elbow_motor.stop()
                 base_motor.stop()
                 gripper_motor.stop()
-            elif distribute[0] == False and distribute[1] == False:
+            elif distributelist[0] == False and distributelist[1] == False:
                 # Free
                 # sorting_zones(active_zones['Pick-Up Zone'], color_func())
                 robot_pick(active_zones['Pick-Up Zone'])
@@ -1021,7 +1023,7 @@ while True:
                 else:
                     robot_release(TRASH)
                     robot_pick(active_zones['Pick-Up Zone'])
-            elif distribute[0] == False and distribute[1] == True:
+            elif distributelist[0] == False and distributelist[1] == True:
                 # Collision Warning
                 elbow_motor.stop()
                 base_motor.stop()
